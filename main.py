@@ -42,8 +42,8 @@ class Game(object):
         )
 
         self._parser = ap.ArgumentParser(
-            prog='raytrace',
-            description='a simple raytracer program',
+            prog='shittypythonraytracer',
+            description='a shitty raytracer program',
             epilog='created by Tomatofu',
         )
         self._parser.add_argument(

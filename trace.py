@@ -192,31 +192,31 @@ class Object(object):
         color = (
             int(pg.math.clamp(
                 reflection._color[0]
-                + reflection._mult[0] * mult * (
-                    (color[0] - reflection._color[0])
-                    * self._reflection_diffuse
+                + reflection._mult[0] * (
+                    color[0] * mult * self._reflection_diffuse
                     + diffuse[0] * 255 * self._diffuse
                     + specular[0] * 255 * self._specular
+                    - reflection._color[0]
                 ),
                 0, 255,
             )),
             int(pg.math.clamp(
                 reflection._color[1]
-                + reflection._mult[1] * mult * (
-                    (color[1] - reflection._color[1])
-                    * self._reflection_diffuse
+                + reflection._mult[1] * (
+                    color[1] * mult * self._reflection_diffuse
                     + diffuse[1] * 255 * self._diffuse
                     + specular[1] * 255 * self._specular
+                    - reflection._color[1]
                 ),
                 0, 255,
             )),
             int(pg.math.clamp(
                 reflection._color[2]
-                + reflection._mult[2] * mult * (
-                    + (color[2] - reflection._color[2])
-                    * self._reflection_diffuse
+                + reflection._mult[2] * (
+                    + color[2] * mult * self._reflection_diffuse
                     + diffuse[2] * 255 * self._diffuse
                     + specular[2] * 255 * self._specular
+                    - reflection._color[2]
                 ),
                 0, 255,
             )),

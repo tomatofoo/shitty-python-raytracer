@@ -230,7 +230,7 @@ class Object(object):
             self._reflection[2] * reflection._mult[2],
         ) * mult
 
-    def intersects(self: Self, reflection: Reflection) -> pg.Vector3:
+    def intersects(self: Self, reflection: Reflection) -> Optional[pg.Vector3]:
         return pg.Vector3(0, 0, 0)
 
     def reflect(self: Self, reflection: Reflection) -> Reflection:
@@ -295,7 +295,7 @@ class Floor(Object):
     def y(self: Self, value: Real) -> None:
         self._y = value
 
-    def intersects(self: Self, reflection: Reflection) -> pg.Vector3:
+    def intersects(self: Self, reflection: Reflection) -> Optional[pg.Vector3]:
         if reflection._vector[1] >= 0:
             return None
         diff = self._y - reflection._pos[1]
@@ -367,7 +367,7 @@ class Sphere(Object):
     def radius(self: Self, value: Real) -> None:
         self._radius = value
 
-    def intersects(self: Self, reflection: Reflection) -> bool:
+    def intersects(self: Self, reflection: Reflection) -> Optional[pg.Vector3]:
         end = reflection._pos + reflection._vector
         r_squared = self._radius * self._radius
         a = (

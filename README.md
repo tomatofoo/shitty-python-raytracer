@@ -2,8 +2,8 @@
 
 ![Render](/images/render.png)
 
-This is a shitty raytracer made in Python. This is a raytracing experiment that
-I made for fun.
+This is a shitty raytracer made in Python. It is a raytracing experiment that I
+made for fun.
 
 ## Usag
 Use the flag `--size` or `-s` to change the size in px of the render 

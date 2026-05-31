@@ -160,55 +160,75 @@ class Object(object):
                    new_vector: pg.Vector3,
                    color: ColorLike,
                    reflection: Reflection) -> ColorLike:
-        camera = self._scene._camera
-        rel = (pos - camera._pos).normalize()
-        for obj in self._scene._objects:
-            if obj is self:
-                continue
-            intersection = obj.intersects(
-                Reflection(None, (0, 0, 0), 0, pos, -rel),
-            )
-            if intersection is None:
-                continue
-            # check if is in front by checking if same sign
-            if (intersection - self._scene._camera._pos)[0] < 0 == rel[0] < 0:
-                return (0, 0, 0)
-        diffuse = max(-rel.dot(normal), 0)
-        specular = max(-rel.dot(new_vector.normalize()), 0)**self._exponent
+        mult = 0
+        diffuse = [0, 0, 0]
+        specular = [0, 0, 0]
+        for light in self._scene._lights:
+            rel = (pos - light._pos).normalize()
+            for obj in self._scene._objects:
+                if obj is self:
+                    continue
+                intersection = obj.intersects(
+                    Reflection(None, (0, 0, 0), 0, pos, -rel),
+                )
+                if intersection is None:
+                    continue
+                # check if is in front by checking if same sign
+                intersection_rel = intersection - light._pos
+                if ((intersection_rel[0] < 0) == (rel[0] < 0)
+                    and (intersection_rel[1] < 0) == (rel[1] < 0)
+                    and (intersection_rel[2] < 0) == (rel[2] < 0)):
+                    break
+            else:
+                d = max(-rel.dot(normal), 0)
+                s = max(-rel.dot(new_vector.normalize()), 0)**self._exponent
+                mult += d
+                diffuse[0] += d * light._color[0] / 255
+                diffuse[1] += d * light._color[1] / 255
+                diffuse[2] += d * light._color[2] / 255
+                specular[0] += s * light._color[0] / 255
+                specular[1] += s * light._color[1] / 255
+                specular[2] += s * light._color[2] / 255
         color = (
             int(pg.math.clamp(
                 reflection._color[0]
-                + (color[0] - reflection._color[0])
-                * reflection._mult[0] * diffuse * self._reflection_diffuse
-                + diffuse * camera._color[0] * self._diffuse
-                + specular * camera._color[0] * self._specular,
+                + reflection._mult[0] * (
+                    (color[0] - reflection._color[0])
+                    * mult * self._reflection_diffuse
+                    + diffuse[0] * 255 * self._diffuse
+                    + specular[0] * 255 * self._specular
+                ),
                 0, 255,
             )),
             int(pg.math.clamp(
                 reflection._color[1]
-                + (color[1] - reflection._color[1])
-                * reflection._mult[1] * diffuse * self._reflection_diffuse
-                + diffuse * camera._color[1] * self._diffuse
-                + specular * camera._color[1] * self._specular,
+                + reflection._mult[1] * (
+                    (color[1] - reflection._color[1])
+                    * mult * self._reflection_diffuse
+                    + diffuse[1] * 255 * self._diffuse
+                    + specular[1] * 255 * self._specular
+                ),
                 0, 255,
             )),
             int(pg.math.clamp(
                 reflection._color[2]
-                + (color[2] - reflection._color[2])
-                * reflection._mult[2] * diffuse * self._reflection_diffuse
-                + diffuse * camera._color[2] * self._diffuse
-                + specular * camera._color[2] * self._specular,
+                + reflection._mult[2] * (
+                    + (color[2] - reflection._color[2])
+                    * mult * self._reflection_diffuse
+                    + diffuse[2] * 255 * self._diffuse
+                    + specular[2] * 255 * self._specular
+                ),
                 0, 255,
             )),
         )
-        return color
+        return color, mult
 
-    def _new_mult(self: Self, reflection: Reflection) -> pg.Vector3:
+    def _new_mult(self: Self, reflection: Reflection, mult: Real) -> pg.Vector3:
         return pg.Vector3(
             self._reflection[0] * reflection._mult[0],
             self._reflection[1] * reflection._mult[1],
             self._reflection[2] * reflection._mult[2],
-        )
+        ) * mult
 
     def intersects(self: Self, reflection: Reflection) -> pg.Vector3:
         return pg.Vector3(0, 0, 0)
@@ -306,10 +326,13 @@ class Floor(Object):
             color = self._color2
         normal = (0, 1, 0)
         new_vector = reflection._vector.reflect(normal)
+        color, mult = self._new_color(
+            pos, normal, new_vector, color, reflection,
+        )
         return Reflection(
             self,
-            self._new_color(pos, normal, new_vector, color, reflection),
-            self._new_mult(reflection),
+            color,
+            self._new_mult(reflection, mult),
             pos,
             new_vector,
         )
@@ -416,12 +439,13 @@ class Sphere(Object):
                 return self._BLANK
             normal = (point1 - self._pos).normalize()
             new_vector = reflection._vector.reflect(normal)
+            color, mult = self._new_color(
+                point1, normal, new_vector, self._color, reflection,
+            )
             return Reflection(
                 self,
-                self._new_color(
-                    point1, normal, new_vector, self._color, reflection,
-                ),
-                self._new_mult(reflection),
+                color,
+                self._new_mult(reflection, mult),
                 point1,
                 new_vector,
             )
@@ -433,12 +457,13 @@ class Sphere(Object):
                 return self._BLANK
             normal = (point1 - self._pos).normalize()
             new_vector = reflection._vector.reflect(normal)
+            color, mult = self._new_color(
+                point1, normal, new_vector, self._color, reflection,
+            )
             return Reflection(
                 self,
-                self._new_color(
-                    point1, normal, new_vector, self._color, reflection,
-                ),
-                self._new_mult(reflection),
+                color,
+                self._new_mult(reflection, mult),
                 point1,
                 new_vector,
             )
@@ -446,15 +471,40 @@ class Sphere(Object):
             return self._BLANK
         normal = (point2 - self._pos).normalize()
         new_vector = reflection._vector.reflect(normal)
+        color, mult = self._new_color(
+            point2, normal, new_vector, self._color, reflection,
+        )
         return Reflection(
             self,
-            self._new_color(
-                point2, normal, new_vector, self._color, reflection,
-            ),
-            self._new_mult(reflection),
+            color,
+            self._new_mult(reflection, mult),
             point2,
             new_vector, 
         )
+
+
+class Light(object):
+    def __init__(self: Self,
+                 pos: pg.Vector3,
+                 color: ColorLike=(255, 255, 255)) -> None:
+        self._pos = pos
+        self._color = color
+
+    @property
+    def pos(self: Self) -> pg.Vector3:
+        return self._pos
+
+    @pos.setter
+    def pos(self: Self, value: pg.Vector3) -> None:
+        self._pos = value
+
+    @property
+    def color(self: Self) -> ColorLike:
+        return self._color
+
+    @color.setter
+    def color(self: Self, value: ColorLike) -> None:
+        self._color = value
 
 
 class Camera(object):
@@ -573,10 +623,14 @@ class Camera(object):
 
 
 class Scene(object):
-    def __init__(self: Self, objects: set[Object], camera: Camera) -> None:
+    def __init__(self: Self,
+                 objects: set[Object],
+                 lights: set[Light],
+                 camera: Camera) -> None:
         self._objects = objects
         for obj in self._objects:
             obj._scene = self
+        self._lights = lights
         self._camera = camera
 
     @property
@@ -590,6 +644,14 @@ class Scene(object):
         self._objects = value
         for obj in self._objects:
             obj._scene = self
+
+    @property
+    def lights(self: Self) -> set[Light]:
+        return self._lights
+
+    @lights.setter
+    def lights(self: Self, value: set[Light]) -> None:
+        self._lights = value
 
     @property
     def camera(self: Self) -> Camera:

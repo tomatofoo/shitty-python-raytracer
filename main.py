@@ -9,6 +9,7 @@ from pygame.typing import ColorLike
 from trace import Object
 from trace import Floor
 from trace import Sphere
+from trace import Light
 from trace import Camera
 from trace import Scene
 
@@ -34,6 +35,10 @@ class Game(object):
                 Sphere((0, 5, 12), 1, (128, 128, 128), 0.5),
                 Sphere((3, 5, 12), 1, (255, 255, 255), 0.5),
             },
+            lights={
+                Light(pg.Vector3(0, 3, 0), color=(255, 255, 255)),
+                Light(pg.Vector3(0, 12, 12), color=(255, 255, 255)),
+            },
             camera=Camera(
                 pos=pg.Vector3(0, 3, 0),
                 rot=pg.Vector3(0, 0, 0),
@@ -44,7 +49,7 @@ class Game(object):
         self._parser = ap.ArgumentParser(
             prog='shittypythonraytracer',
             description='a shitty raytracer program',
-            epilog='created by Tomatofu',
+            epilog='cureated by Tomatofu',
         )
         self._parser.add_argument(
             '-s', '--size',

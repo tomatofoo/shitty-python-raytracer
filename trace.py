@@ -160,7 +160,6 @@ class Object(object):
                    new_vector: pg.Vector3,
                    color: ColorLike,
                    reflection: Reflection) -> ColorLike:
-        mult = 0
         diffuse = [0, 0, 0]
         specular = [0, 0, 0]
         for light in self._scene._lights:
@@ -182,7 +181,6 @@ class Object(object):
             else:
                 d = max(-rel.dot(normal), 0)
                 s = max(-rel.dot(new_vector.normalize()), 0)**self._exponent
-                mult += d
                 diffuse[0] += d * light._color[0] / 255
                 diffuse[1] += d * light._color[1] / 255
                 diffuse[2] += d * light._color[2] / 255
@@ -221,14 +219,14 @@ class Object(object):
                 0, 255,
             )),
         )
-        return color, mult
+        return color, diffuse
 
-    def _new_mult(self: Self, reflection: Reflection, mult: Real) -> pg.Vector3:
+    def _new_mult(self: Self, reflection: Reflection, mult: pg.Vector3) -> pg.Vector3:
         return pg.Vector3(
-            self._reflection[0] * reflection._mult[0],
-            self._reflection[1] * reflection._mult[1],
-            self._reflection[2] * reflection._mult[2],
-        ) * mult
+            self._reflection[0] * reflection._mult[0] * mult[0],
+            self._reflection[1] * reflection._mult[1] * mult[1],
+            self._reflection[2] * reflection._mult[2] * mult[2],
+        )
 
     def intersects(self: Self, reflection: Reflection) -> Optional[pg.Vector3]:
         return pg.Vector3(0, 0, 0)

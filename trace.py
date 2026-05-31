@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 import random
 from numbers import Real
@@ -10,14 +12,24 @@ from pygame.typing import ColorLike
 
 class Reflection(object):
     def __init__(self: Self,
+                 obj: Object,
                  color: ColorLike,
                  mult: Real | pg.Vector3,
                  pos: Optional[pg.Vector3],
                  vector: Optional[pg.Vector3]=None) -> None:
+        self._obj = obj
         self._color = color
         self.mult = pg.Vector3(mult)
         self._pos = pos
         self.vector = vector
+
+    @property
+    def obj(self: Self) -> Object:
+        return self._obj
+
+    @obj.setter
+    def obj(self: Self, value: Object) -> None:
+        self._obj = value
 
     @property
     def color(self: Self) -> ColorLike:
@@ -62,7 +74,7 @@ class Reflection(object):
 
 class Object(object):
     
-    _BLANK = Reflection((0, 0, 0), 0, None, None)
+    _BLANK = Reflection(None, (0, 0, 0), 0, None, None)
 
     def __init__(self: Self,
                  pos: pg.Vector3,
@@ -150,6 +162,17 @@ class Object(object):
                    reflection: Reflection) -> ColorLike:
         camera = self._scene._camera
         rel = (pos - camera._pos).normalize()
+        for obj in self._scene._objects:
+            if obj is self:
+                continue
+            intersection = obj.intersects(
+                Reflection(None, (0, 0, 0), 0, pos, -rel),
+            )
+            if intersection is None:
+                continue
+            # check if is in front by checking if same sign
+            if (intersection - self._scene._camera._pos)[0] < 0 == rel[0] < 0:
+                return (0, 0, 0)
         diffuse = max(-rel.dot(normal), 0)
         specular = max(-rel.dot(new_vector.normalize()), 0)**self._exponent
         color = (
@@ -186,6 +209,9 @@ class Object(object):
             self._reflection[1] * reflection._mult[1],
             self._reflection[2] * reflection._mult[2],
         )
+
+    def intersects(self: Self, reflection: Reflection) -> pg.Vector3:
+        return pg.Vector3(0, 0, 0)
 
     def reflect(self: Self, reflection: Reflection) -> Reflection:
         return reflection
@@ -249,17 +275,29 @@ class Floor(Object):
     def y(self: Self, value: Real) -> None:
         self._y = value
 
+    def intersects(self: Self, reflection: Reflection) -> pg.Vector3:
+        if reflection._vector[1] >= 0:
+            return None
+        diff = self._y - reflection._pos[1]
+        return pg.Vector3(
+            reflection._pos[0]
+            + reflection._vector[0] / reflection._vector[1] * diff,
+            self._y,
+            reflection._pos[2]
+            + reflection._vector[2] / reflection._vector[1] * diff,
+        )
+
     def reflect(self: Self, reflection: Reflection) -> Reflection:
-        if reflection.vector[1] >= 0:
+        if reflection._vector[1] >= 0:
             return self._BLANK
 
-        diff = self._y - reflection.pos[1]
+        diff = self._y - reflection._pos[1]
         pos = pg.Vector3(
-            reflection.pos[0]
-            + reflection.vector[0] / reflection.vector[1] * diff,
+            reflection._pos[0]
+            + reflection._vector[0] / reflection._vector[1] * diff,
             self._y,
-            reflection.pos[2]
-            + reflection.vector[2] / reflection.vector[1] * diff,
+            reflection._pos[2]
+            + reflection._vector[2] / reflection._vector[1] * diff,
         )
         if ((pos[0] % self._period < self._semiperiod)
             == (pos[2] % self._period < self._semiperiod)):
@@ -267,8 +305,9 @@ class Floor(Object):
         else:
             color = self._color2
         normal = (0, 1, 0)
-        new_vector = reflection.vector.reflect(normal)
+        new_vector = reflection._vector.reflect(normal)
         return Reflection(
+            self,
             self._new_color(pos, normal, new_vector, color, reflection),
             self._new_mult(reflection),
             pos,
@@ -305,19 +344,59 @@ class Sphere(Object):
     def radius(self: Self, value: Real) -> None:
         self._radius = value
 
-    def reflect(self: Self, reflection: Reflection) -> Reflection:
-        # https://stackoverflow.com/a/5883559
-        end = reflection.pos + reflection.vector
+    def intersects(self: Self, reflection: Reflection) -> bool:
+        end = reflection._pos + reflection._vector
         r_squared = self._radius * self._radius
         a = (
-            (reflection.pos[0] - end[0])**2
-            + (reflection.pos[1] - end[1])**2
-            + (reflection.pos[2] - end[2])**2
+            (reflection._pos[0] - end[0])**2
+            + (reflection._pos[1] - end[1])**2
+            + (reflection._pos[2] - end[2])**2
         )
         c = (
-            (reflection.pos[0] - self._pos[0])**2
-            + (reflection.pos[1] - self._pos[1])**2
-            + (reflection.pos[2] - self._pos[2])**2
+            (reflection._pos[0] - self._pos[0])**2
+            + (reflection._pos[1] - self._pos[1])**2
+            + (reflection._pos[2] - self._pos[2])**2
+            - r_squared
+        )
+        b = (
+            (end[0] - self._pos[0])**2
+            + (end[1] - self._pos[1])**2
+            + (end[2] - self._pos[2])**2
+            - a - c - r_squared
+        )
+        disc = b * b - 4 * a * c # discriminant
+        if disc < 0:
+            return None
+        t1 = (-b + math.sqrt(disc)) / (2 * a)
+        point1 = reflection._pos + reflection._vector * t1
+        if disc == 0:
+            if t1 < 0:
+                return None
+            return point1
+        t2 = (-b - math.sqrt(disc)) / (2 * a)
+        point2 = reflection._pos + reflection._vector * t2
+        if (reflection._pos.distance_to(point1)
+            < reflection._pos.distance_to(point2)):
+            if t1 < 0:
+                return None
+            return point2
+        if t2 < 0:
+            return None
+        return point2
+
+    def reflect(self: Self, reflection: Reflection) -> Reflection:
+        # https://stackoverflow.com/a/5883559
+        end = reflection._pos + reflection._vector
+        r_squared = self._radius * self._radius
+        a = (
+            (reflection._pos[0] - end[0])**2
+            + (reflection._pos[1] - end[1])**2
+            + (reflection._pos[2] - end[2])**2
+        )
+        c = (
+            (reflection._pos[0] - self._pos[0])**2
+            + (reflection._pos[1] - self._pos[1])**2
+            + (reflection._pos[2] - self._pos[2])**2
             - r_squared
         )
         b = (
@@ -331,13 +410,14 @@ class Sphere(Object):
             return self._BLANK
         # color = self._new_color(self._color, reflection)
         t1 = (-b + math.sqrt(disc)) / (2 * a)
-        point1 = reflection.pos + reflection.vector * t1
+        point1 = reflection._pos + reflection._vector * t1
         if disc == 0:
             if t1 < 0:
                 return self._BLANK
             normal = (point1 - self._pos).normalize()
-            new_vector = reflection.vector.reflect(normal)
+            new_vector = reflection._vector.reflect(normal)
             return Reflection(
+                self,
                 self._new_color(
                     point1, normal, new_vector, self._color, reflection,
                 ),
@@ -346,14 +426,15 @@ class Sphere(Object):
                 new_vector,
             )
         t2 = (-b - math.sqrt(disc)) / (2 * a)
-        point2 = reflection.pos + reflection.vector * t2
-        if (reflection.pos.distance_to(point1)
-            < reflection.pos.distance_to(point2)):
+        point2 = reflection._pos + reflection._vector * t2
+        if (reflection._pos.distance_to(point1)
+            < reflection._pos.distance_to(point2)):
             if t1 < 0:
                 return self._BLANK
             normal = (point1 - self._pos).normalize()
-            new_vector = reflection.vector.reflect(normal)
+            new_vector = reflection._vector.reflect(normal)
             return Reflection(
+                self,
                 self._new_color(
                     point1, normal, new_vector, self._color, reflection,
                 ),
@@ -364,8 +445,9 @@ class Sphere(Object):
         if t2 < 0:
             return self._BLANK
         normal = (point2 - self._pos).normalize()
-        new_vector = reflection.vector.reflect(normal)
+        new_vector = reflection._vector.reflect(normal)
         return Reflection(
+            self,
             self._new_color(
                 point2, normal, new_vector, self._color, reflection,
             ),
@@ -521,6 +603,7 @@ class Scene(object):
         for y in range(surf.height):
             for x in range(surf.width):
                 reflection = Reflection(
+                    None,
                     (0, 0, 0),
                     1,
                     self._camera.pos,
@@ -542,12 +625,12 @@ class Scene(object):
                         tentative = obj.reflect(reflection)
                         if tentative.pos is None:
                             continue
-                        dist = reflection.pos.distance_to(tentative.pos)
+                        dist = reflection._pos.distance_to(tentative.pos)
                         if dist < closest[0]:
                             closest = (dist, tentative, obj)
                     reflection = closest[1]
                     current = closest[2]
-                    if math.isinf(closest[0]) or reflection.vector is None:
+                    if math.isinf(closest[0]) or reflection._vector is None:
                         break
-                surf.set_at((x, y), reflection.color)
+                surf.set_at((x, y), reflection._color)
 
